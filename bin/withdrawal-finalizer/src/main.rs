@@ -21,7 +21,11 @@ use sqlx::{
 };
 
 use chain_events::{BlockEvents, L2EventsListener};
-use client::{l1bridge::codegen::IL1Bridge, zksync_contract::codegen::IZkSync, ZksyncMiddleware};
+use client::{
+    l1_shared_bridge::codegen::IL1SharedBridge,
+    zksync_contract::codegen::IZkSync,
+    ZksyncMiddleware
+};
 use config::Config;
 use tokio::sync::watch;
 use vise_exporter::MetricsExporter;
@@ -222,7 +226,7 @@ async fn main() -> Result<()> {
         config.finalize_eth_token.unwrap_or(true),
     );
 
-    let l1_bridge = IL1Bridge::new(config.l1_erc20_bridge_proxy_addr, client_l1.clone());
+    let l1_bridge = IL1SharedBridge::new(config.l1_erc20_bridge_proxy_addr, client_l1.clone());
 
     let zksync_contract = IZkSync::new(config.diamond_proxy_addr, client_l1.clone());
 
@@ -295,6 +299,7 @@ async fn main() -> Result<()> {
         contract,
         zksync_contract,
         l1_bridge,
+        config.chain_eth_zksync_network_id.into(),
         config.tx_retry_timeout,
         finalizer_account_address,
         meter_withdrawals,

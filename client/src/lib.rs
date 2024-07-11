@@ -24,7 +24,8 @@ use ethers::{
 
 use ethers_log_decode::EthLogDecode;
 use ethtoken::codegen::WithdrawalFilter;
-use l1bridge::codegen::{FinalizeWithdrawalCall, IL1Bridge};
+use l1bridge::codegen::FinalizeWithdrawalCall;
+use l1_shared_bridge::codegen::IL1SharedBridge;
 use l1messenger::codegen::L1MessageSentFilter;
 use l2standard_token::codegen::{BridgeBurnFilter, L1AddressCall};
 use lazy_static::lazy_static;
@@ -65,6 +66,7 @@ pub const DEPLOYER_ADDRESS: Address = H160([
 pub mod contracts_deployer;
 pub mod ethtoken;
 pub mod l1bridge;
+pub mod l1_shared_bridge;
 pub mod l1messenger;
 pub mod l2bridge;
 pub mod l2standard_token;
@@ -512,7 +514,8 @@ pub async fn is_withdrawal_finalized<'a, M1, M2>(
     index: usize,
     sender: Address,
     zksync_contract: &'a IZkSync<M1>,
-    l1_bridge: &'a IL1Bridge<M1>,
+    l1_bridge: &'a IL1SharedBridge<M1>,
+    zksync_network_id: U256,
     l2_middleware: &'a M2,
 ) -> Result<bool>
 where
@@ -551,21 +554,12 @@ where
         None => return Ok(false),
     };
 
-    if is_eth(sender) {
-        let is_finalized = zksync_contract
-            .is_eth_withdrawal_finalized(l1_batch_number, l2_message_index.into())
-            .call()
-            .await?;
+    let is_finalized = l1_bridge
+        .is_withdrawal_finalized(zksync_network_id, l1_batch_number, l2_message_index.into())
+        .call()
+        .await?;
 
-        Ok(is_finalized)
-    } else {
-        let is_finalized = l1_bridge
-            .is_withdrawal_finalized(l1_batch_number, l2_message_index.into())
-            .call()
-            .await?;
-
-        Ok(is_finalized)
-    }
+    Ok(is_finalized)
 }
 
 fn get_l1_bridge_burn_message_keccak(
