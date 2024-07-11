@@ -26,12 +26,12 @@ pub struct Config {
     pub chain_eth_zksync_network_id: u64,
 
     /// Address of the `L1Bridge` contract.
-    #[envconfig(from = "CONTRACTS_L1_ERC20_BRIDGE_PROXY_ADDR")]
-    pub l1_erc20_bridge_proxy_addr: Address,
+    #[envconfig(from = "CONTRACTS_L1_SHARED_BRIDGE_PROXY_ADDR")]
+    pub l1_shared_bridge_proxy_addr: Address,
 
     /// Address of the `L2ERC20Bridge` contract.
-    #[envconfig(from = "CONTRACTS_L2_ERC20_BRIDGE_ADDR")]
-    pub l2_erc20_bridge_addr: Address,
+    #[envconfig(from = "CONTRACTS_L2_SHARED_BRIDGE_PROXY_ADDR")]
+    pub l2_shared_bridge_addr: Address,
 
     /// Main contract
     #[envconfig(from = "CONTRACTS_DIAMOND_PROXY_ADDR")]

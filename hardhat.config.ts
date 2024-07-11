@@ -4,8 +4,8 @@ import '@nomiclabs/hardhat-etherscan';
 import '@typechain/hardhat';
 
 const config = {
-    ZKSYNC_ADDRESS: process.env.CONTRACTS_DIAMOND_PROXY_ADDR,
-    ERC20_BRIDGE_ADDRESS: process.env.CONTRACTS_L1_ERC20_BRIDGE_PROXY_ADDR
+    CHAIN_ID: process.env.CHAIN_ETH_ZKSYNC_NETWORK_ID,
+    L1_SHARED_BRIDGE_PROXY_ADDR: process.env.CONTRACTS_L1_SHARED_BRIDGE_PROXY_ADDR
 };
 
 export default {

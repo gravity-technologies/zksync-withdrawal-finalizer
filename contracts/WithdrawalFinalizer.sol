@@ -8,7 +8,7 @@ import {IL1SharedBridge} from "./IL1SharedBridge.sol";
 contract WithdrawalFinalizer {
     using UncheckedMath for uint256;
     uint256 constant chainId = $(CHAIN_ID);
-    IL1SharedBridge constant L1_SHARED_BRIDGE = IL1SharedBridge($(L1_SHARED_BRIDGE_ADDRESS));
+    IL1SharedBridge constant L1_SHARED_BRIDGE = IL1SharedBridge($(L1_SHARED_BRIDGE_PROXY_ADDR));
 
     struct RequestFinalizeWithdrawal {
         uint256 _l2BatchNumber;

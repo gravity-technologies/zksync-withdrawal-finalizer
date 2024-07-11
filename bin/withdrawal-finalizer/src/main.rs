@@ -221,12 +221,12 @@ async fn main() -> Result<()> {
         config
             .custom_token_deployer_addresses
             .map(|list| list.0)
-            .unwrap_or(vec![config.l2_erc20_bridge_addr]),
+            .unwrap_or(vec![config.l2_shared_bridge_addr]),
         tokens.into_iter().collect(),
         config.finalize_eth_token.unwrap_or(true),
     );
 
-    let l1_bridge = IL1SharedBridge::new(config.l1_erc20_bridge_proxy_addr, client_l1.clone());
+    let l1_bridge = IL1SharedBridge::new(config.l1_shared_bridge_proxy_addr, client_l1.clone());
 
     let zksync_contract = IZkSync::new(config.diamond_proxy_addr, client_l1.clone());
 
@@ -245,7 +245,7 @@ async fn main() -> Result<()> {
 
     let block_events_handle = tokio::spawn(event_mux.run_with_reconnects(
         config.diamond_proxy_addr,
-        config.l2_erc20_bridge_addr,
+        config.l2_shared_bridge_addr,
         from_l1_block,
         blocks_tx_wrapped,
     ));
