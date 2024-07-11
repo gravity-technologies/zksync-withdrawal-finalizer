@@ -2,14 +2,13 @@
 
 pragma solidity ^0.8.0;
 
-import "@matterlabs/zksync-contracts/l1/contracts/bridge/interfaces/IL1Bridge.sol";
 import "./UncheckedMath.sol";
 import {IL1SharedBridge} from "./IL1SharedBridge.sol";
 
 contract WithdrawalFinalizer {
     using UncheckedMath for uint256;
     uint256 constant chainId = $(CHAIN_ID);
-    IL1Bridge constant L1_SHARED_BRIDGE = IL1SharedBridge($(L1_SHARED_BRIDGE_ADDRESS));
+    IL1SharedBridge constant L1_SHARED_BRIDGE = IL1SharedBridge($(L1_SHARED_BRIDGE_ADDRESS));
 
     struct RequestFinalizeWithdrawal {
         uint256 _l2BatchNumber;
