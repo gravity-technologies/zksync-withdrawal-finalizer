@@ -71,7 +71,7 @@ When you know those to deploy the contract you need to run (assume you are runni
 
 ```
 $ yarn
-$ env CONTRACTS_DIAMOND_PROXY_ADDR="0x9A6DE0f62Aa270A8bCB1e2610078650D539B1Ef9" CONTRACTS_L1_SHARED_BRIDGE_PROXY_ADDR="0x2Ae09702F77a4940621572fBcDAe2382D44a2cbA" MNEMONIC="test test test test test test test test test test test junk" ETH_CLIENT_WEB3_URL="http://localhost:8545" npx hardhat run ./scripts/deploy.ts
+$ env CHAIN_ETH_ZKSYNC_NETWORK_ID=270 CONTRACTS_L1_SHARED_BRIDGE_PROXY_ADDR="0x2Ae09702F77a4940621572fBcDAe2382D44a2cbA" MNEMONIC="test test test test test test test test test test test junk" ETH_CLIENT_WEB3_URL="http://localhost:8545" npx hardhat run ./scripts/deploy.ts
 ```
 
 If all goes well the the result would be
