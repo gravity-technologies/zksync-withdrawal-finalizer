@@ -6,7 +6,7 @@
           "components": [
             {
               "internalType": "uint256",
-              "name": "_l2BlockNumber",
+              "name": "_l2BatchNumber",
               "type": "uint256"
             },
             {
@@ -16,7 +16,7 @@
             },
             {
               "internalType": "uint16",
-              "name": "_l2TxNumberInBlock",
+              "name": "_l2TxNumberInBatch",
               "type": "uint16"
             },
             {
@@ -28,11 +28,6 @@
               "internalType": "bytes32[]",
               "name": "_merkleProof",
               "type": "bytes32[]"
-            },
-            {
-              "internalType": "bool",
-              "name": "_isEth",
-              "type": "bool"
             },
             {
               "internalType": "uint256",
@@ -51,7 +46,7 @@
           "components": [
             {
               "internalType": "uint256",
-              "name": "_l2BlockNumber",
+              "name": "_l2BatchNumber",
               "type": "uint256"
             },
             {

@@ -104,12 +104,11 @@ impl WithdrawalParams {
         withdrawal_gas_limit: U256,
     ) -> RequestFinalizeWithdrawal {
         RequestFinalizeWithdrawal {
-            l_2_block_number: self.l1_batch_number.as_u64().into(),
+            l_2_batch_number: self.l1_batch_number.as_u64().into(),
             l_2_message_index: self.l2_message_index.into(),
-            l_2_tx_number_in_block: self.l2_tx_number_in_block,
+            l_2_tx_number_in_batch: self.l2_tx_number_in_block,
             message: self.message,
             merkle_proof: self.proof,
-            is_eth: is_eth(self.sender),
             gas: withdrawal_gas_limit,
         }
     }
