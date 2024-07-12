@@ -7,8 +7,15 @@ import {IL1SharedBridge} from "./IL1SharedBridge.sol";
 
 contract WithdrawalFinalizer {
     using UncheckedMath for uint256;
-    uint256 constant chainId = $(CHAIN_ID);
-    IL1SharedBridge constant L1_SHARED_BRIDGE = IL1SharedBridge($(L1_SHARED_BRIDGE_PROXY_ADDR));
+    uint256 immutable chainId;
+    IL1SharedBridge immutable l1SharedBridge;
+
+    constructor(uint256 _chainID, address _l1SharedBridge) {
+        require(_chainID > 0, "c");
+        require(_l1SharedBridge != address(0), "l");
+        chainId = _chainID;
+        l1SharedBridge = IL1SharedBridge(_l1SharedBridge);
+    }
 
     struct RequestFinalizeWithdrawal {
         uint256 _l2BatchNumber;
@@ -35,7 +42,7 @@ contract WithdrawalFinalizer {
             require(gasleft() >= ((requests[i]._gas * 64) / 63) + 500, "i");
             uint256 gasBefore = gasleft();
             try
-                L1_SHARED_BRIDGE.finalizeWithdrawal{gas: requests[i]._gas}(
+                l1SharedBridge.finalizeWithdrawal{gas: requests[i]._gas}(
                     chainId,
                     requests[i]._l2BatchNumber,
                     requests[i]._l2MessageIndex,

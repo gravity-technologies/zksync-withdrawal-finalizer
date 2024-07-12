@@ -64,22 +64,42 @@ The configuration structure describing the service config can be found in [`conf
 
 ## Deploying the finalizer smart contract
 
-The finalizer smart contract needs to reference the addresses of the diamond proxy contract and l1 erc20 proxy contract.
+The finalizer smart contract needs to reference ZkSync network ID and the addresses of the l1 shared bridge.
 You also need to know the key of the account you want to use to deploy the finalizer contract.
 
-When you know those to deploy the contract you need to run (assume you are running `anvil` in a separate terminal):
+Step 1: create the config file, example:
 
+```json
+{
+    "WithdrawalFinalizerModule": {
+        "chainId": 270,
+        "l1SharedBridge": "0xbFc201b08F2a670B935F0f6E97d2032d95477A07"
+    }
+}
 ```
+
+Step 2: deploy
+```sh
 $ yarn
-$ env CHAIN_ETH_ZKSYNC_NETWORK_ID=270 CONTRACTS_L1_SHARED_BRIDGE_PROXY_ADDR="0x2Ae09702F77a4940621572fBcDAe2382D44a2cbA" MNEMONIC="test test test test test test test test test test test junk" ETH_CLIENT_WEB3_URL="http://localhost:8545" npx hardhat run ./scripts/deploy.ts
+$ yarn deploy --parameters <path_to_config_file> --network <network>
 ```
 
 If all goes well the the result would be
 
 ```
-...
-Compiled 18 Solidity files successfully (evm target: paris).
-CONTRACTS_WITHDRAWAL_FINALIZER_ADDRESS=0x712516e61C8B383dF4A63CFe83d7701Bce54B03e
+✔ Confirm deploy to network localhost (9)? … yes
+Hardhat Ignition 🚀
+
+Deploying [ WithdrawalFinalizerModule ]
+
+Batch #1
+  Executed WithdrawalFinalizerModule#WithdrawalFinalizer
+
+[ WithdrawalFinalizerModule ] successfully deployed 🚀
+
+Deployed Addresses
+
+WithdrawalFinalizerModule#WithdrawalFinalizer - 0xBEeb9F55d523918f9cD2979A454610f673c2885e
 ```
 
 And so you know the address of the deployed contract.
