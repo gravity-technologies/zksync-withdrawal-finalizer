@@ -34,6 +34,9 @@ pub enum L2Event {
 
     /// Token initialization event.
     L2TokenInitEvent(L2TokenInitEvent),
+
+    /// block seen with a transfer event
+    BlockSeen(u64),
 }
 
 impl From<WithdrawalEvent> for L2Event {
