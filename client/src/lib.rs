@@ -24,8 +24,8 @@ use ethers::{
 
 use ethers_log_decode::EthLogDecode;
 use ethtoken::codegen::WithdrawalFilter;
-use l1bridge::codegen::FinalizeWithdrawalCall;
 use l1_shared_bridge::codegen::IL1SharedBridge;
+use l1bridge::codegen::FinalizeWithdrawalCall;
 use l1messenger::codegen::L1MessageSentFilter;
 use l2standard_token::codegen::{BridgeBurnFilter, L1AddressCall};
 use lazy_static::lazy_static;
@@ -63,10 +63,12 @@ pub const DEPLOYER_ADDRESS: Address = H160([
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
     0x00, 0x00, 0x80, 0x06,
 ]);
+
+pub mod base_token;
 pub mod contracts_deployer;
 pub mod ethtoken;
-pub mod l1bridge;
 pub mod l1_shared_bridge;
+pub mod l1bridge;
 pub mod l1messenger;
 pub mod l2bridge;
 pub mod l2standard_token;

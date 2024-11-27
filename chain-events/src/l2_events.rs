@@ -1,8 +1,10 @@
 use std::{collections::HashSet, sync::Arc};
 
+use futures::stream::select;
 use futures::{Sink, SinkExt, StreamExt};
 
 use client::{
+    base_token::codegen::TransferFilter,
     contracts_deployer::codegen::ContractDeployedFilter,
     ethtoken::codegen::WithdrawalFilter,
     l2standard_token::codegen::{
@@ -40,6 +42,7 @@ enum L2Events {
     Withdrawal(WithdrawalFilter),
     #[allow(unused)]
     ContractDeployed(ContractDeployedFilter),
+    Transfer(TransferFilter),
 }
 
 #[derive(EthLogDecode)]
@@ -306,6 +309,8 @@ enum RunResult {
     OtherError,
 }
 
+const ADDRESS_L2_BASE_TOKEN_STR: &str = "0x000000000000000000000000000000000000800A";
+
 impl L2EventsListener {
     /// A convenience function that listens for all withdrawal events on L2
     ///
@@ -357,15 +362,13 @@ impl L2EventsListener {
             .number
             .expect("last block always has a number; qed");
 
-        if last_seen_l2_token_block.as_number() <= from_block.as_number() {
-            self.query_past_token_init_events(
-                last_seen_l2_token_block,
-                BlockNumber::Number(latest_block),
-                &mut sender,
-                &middleware,
-            )
-            .await?;
-        }
+        self.query_past_token_init_events(
+            last_seen_l2_token_block,
+            BlockNumber::Number(latest_block),
+            &mut sender,
+            &middleware,
+        )
+        .await?;
 
         let mut tokens = self.tokens.iter().cloned().collect::<Vec<_>>();
         tokens.extend_from_slice(self.token_deployer_addrs.as_slice());
@@ -383,16 +386,27 @@ impl L2EventsListener {
             .address(tokens)
             .topic0(topic0);
 
+        let filter_transfer = Filter::new()
+            .from_block(latest_block + 1)
+            .address(ADDRESS_L2_BASE_TOKEN_STR.parse::<Address>().unwrap())
+            .topic0(vec![TransferFilter::signature()]);
+
         tracing::info!("filter past {past_filter:#?}");
         tracing::info!("filter {filter:#?}");
-
+        tracing::info!("filter transfer {filter_transfer:#?}");
         let past_logs = middleware.get_logs_paginated(&past_filter, pagination_step);
         let current_logs = middleware
             .subscribe_logs(&filter)
             .await
             .map_err(|e| Error::Middleware(e.to_string()))?;
 
-        let mut logs = past_logs.chain(current_logs.map(Ok));
+        let transfer_logs = middleware
+            .subscribe_logs(&filter_transfer)
+            .await
+            .map_err(|e| Error::Middleware(e.to_string()))?;
+
+        let mut logs = past_logs.chain(select(current_logs.map(Ok), transfer_logs.map(Ok)));
+
         let mut successful_logs = 0;
 
         while let Some(log) = logs.next().await {
@@ -532,6 +546,12 @@ impl L2EventsListener {
                             return Ok(Some(NewTokenAdded));
                         }
                     }
+                }
+                L2Events::Transfer(_) => {
+                    sender
+                        .send(L2Event::BlockSeen(block_number.as_u64()))
+                        .await
+                        .map_err(|_| Error::ChannelClosing)?;
                 }
             }
         }
