@@ -36,8 +36,8 @@ pub enum Error {
     #[error("Failed to decode withdrawal event from log")]
     FailedToDecodeLog,
 
-    #[error("WithdrawalInitiatedFilter is not found for {0:?} at index {1}")]
-    WithdrawalInitiatedFilterNotFound(H256, usize),
+    #[error("L2NativeTokenVaultBridgeBurnFilter is not found for {0:?} at index {1}")]
+    L2NativeTokenVaultBridgeBurnFilterNotFound(H256, usize),
 
     #[error("L2ToL1 message for transaction {0:?} with value {1:?} not found")]
     L2ToL1WithValueNotFound(H256, H256),

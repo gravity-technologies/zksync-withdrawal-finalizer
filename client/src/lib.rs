@@ -40,6 +40,7 @@ use zksync_types::{
 pub use zksync_contract::BlockEvent;
 pub use zksync_types::WithdrawalEvent;
 
+use crate::l2_native_token_vault::codegen::BridgeBurnFilter as L2NativeTokenVaultBridgeBurnFilter;
 use crate::l2bridge::codegen::WithdrawalInitiatedFilter;
 use crate::metrics::CLIENT_METRICS;
 
@@ -70,6 +71,7 @@ pub mod ethtoken;
 pub mod l1_shared_bridge;
 pub mod l1bridge;
 pub mod l1messenger;
+pub mod l2_native_token_vault;
 pub mod l2bridge;
 pub mod l2standard_token;
 pub mod withdrawal_finalizer;
@@ -375,21 +377,21 @@ impl<P: JsonRpcClient> ZksyncMiddleware for Provider<P> {
                 drop(addr_lock);
 
                 // Get the `l1_receiver` address that receives the withdrawal on L1;
-                // it is available only in the `WithdrawalInitiatedFilter` event, look for it.
-                let withdrawal_initiated_event = receipt
+                // it is available only in the `BridgeBurn` event from the L2NativeTokenVault.
+                let l2_ntv_bridge_burn_event = receipt
                     .logs
                     .iter()
                     .filter_map(|log| {
                         let raw_log: RawLog = log.clone().into();
-                        <WithdrawalInitiatedFilter as EthEvent>::decode_log(&raw_log).ok()
+                        <L2NativeTokenVaultBridgeBurnFilter as EthEvent>::decode_log(&raw_log).ok()
                     })
                     .nth(index)
-                    .ok_or(Error::WithdrawalInitiatedFilterNotFound(
+                    .ok_or(Error::L2NativeTokenVaultBridgeBurnFilterNotFound(
                         withdrawal_hash,
                         index,
                     ))?;
 
-                let l1_receiver = withdrawal_initiated_event.l_1_receiver;
+                let l1_receiver = l2_ntv_bridge_burn_event.receiver;
 
                 get_l1_bridge_burn_message_keccak(b.amount, l1_receiver, l1_address)?
             }
