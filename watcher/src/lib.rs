@@ -393,12 +393,14 @@ where
             L2Event::Withdrawal(event) => {
                 tracing::info!("received withdrawal event {event:?}");
                 if event.block_number > curr_l2_block_number {
-                    process_withdrawals_in_block(
-                        &pool,
-                        std::mem::take(&mut in_block_events),
-                        &mut withdrawals_meterer,
-                    )
-                    .await?;
+                    if in_block_events.len() > 0 {
+                        process_withdrawals_in_block(
+                            &pool,
+                            std::mem::take(&mut in_block_events),
+                            &mut withdrawals_meterer,
+                        )
+                        .await?;
+                    }
                     curr_l2_block_number = event.block_number;
                 }
                 in_block_events.push(event);
@@ -425,6 +427,20 @@ where
                     &mut withdrawals_meterer,
                 )
                 .await?;
+            }
+            L2Event::BlockSeen(block_number) => {
+                if block_number > curr_l2_block_number {
+                    if in_block_events.len() > 0 {
+                        tracing::info!("seen block: {block_number}, processing withdrawals in {curr_l2_block_number}");
+                        process_withdrawals_in_block(
+                            &pool,
+                            std::mem::take(&mut in_block_events),
+                            &mut withdrawals_meterer,
+                        )
+                        .await?;
+                        curr_l2_block_number = block_number;
+                    }
+                }
             }
         }
     }

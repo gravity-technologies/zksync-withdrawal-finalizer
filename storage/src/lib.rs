@@ -10,7 +10,7 @@ use sqlx::{PgConnection, PgPool};
 
 use chain_events::L2TokenInitEvent;
 use client::{
-    is_eth, withdrawal_finalizer::codegen::RequestFinalizeWithdrawal, zksync_contract::L2ToL1Event,
+    withdrawal_finalizer::codegen::RequestFinalizeWithdrawal, zksync_contract::L2ToL1Event,
     WithdrawalEvent, WithdrawalKey, WithdrawalParams,
 };
 
@@ -961,12 +961,11 @@ pub async fn get_finalize_withdrawal_params(
     .fetch_optional(pool)
     .await?
     .map(|r| RequestFinalizeWithdrawal {
-        l_2_block_number: r.l1_batch_number.into(),
+        l_2_batch_number: r.l1_batch_number.into(),
         l_2_message_index: r.l2_message_index.into(),
-        l_2_tx_number_in_block: r.l2_tx_number_in_block as u16,
+        l_2_tx_number_in_batch: r.l2_tx_number_in_block as u16,
         message: r.message.into(),
         merkle_proof: bincode::deserialize(&r.proof).unwrap(),
-        is_eth: is_eth(Address::from_slice(&r.token)),
         gas: gas.into(),
     });
 
