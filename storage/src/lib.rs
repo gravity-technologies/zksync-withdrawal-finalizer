@@ -687,14 +687,11 @@ pub async fn get_withdrawals_with_no_data(
             ),
             1
           )
-          AND id > COALESCE(
-            (
-              SELECT
-                MAX(withdrawal_id)
-              FROM
-                finalization_data
-            ),
-            1
+          AND id not in (
+            SELECT
+            withdrawal_id
+            FROM
+              finalization_data
           )
           AND finalizable = TRUE
         ORDER BY
