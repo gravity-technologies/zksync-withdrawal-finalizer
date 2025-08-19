@@ -261,10 +261,20 @@ pub trait ZksyncMiddleware: Middleware {
         tx_hash: H256,
         index: usize,
     ) -> Result<Option<(L2ToL1Log, Option<U64>)>>;
+
+    /// Get the chain ID.
+    async fn get_chain_id(&self) -> Result<u32>;
 }
 
 #[async_trait]
 impl<P: JsonRpcClient> ZksyncMiddleware for Provider<P> {
+    async fn get_chain_id(&self) -> Result<u32> {
+        let latency = CLIENT_METRICS.call[&"get_chain_id"].start();
+        let chain_id: U64 = self.request::<(), U64>("eth_chainId", ()).await?;
+        latency.observe();
+        Ok(chain_id.as_u32())
+    }
+
     async fn get_block_details(&self, block_number: u32) -> Result<Option<BlockDetails>> {
         let latency = CLIENT_METRICS.call[&"get_block_details"].start();
         let res = self
@@ -420,10 +430,13 @@ impl<P: JsonRpcClient> ZksyncMiddleware for Provider<P> {
 
         let sender = log.topics[1].into();
 
-        let proof = self
+        // Proof can be not ready yet.
+        let Some(proof) = self
             .get_log_proof(withdrawal_hash, Some(l2_to_l1_log_index as u64))
             .await?
-            .expect("Log proof should be present. qed");
+        else {
+            return Ok(None);
+        };
 
         let message: Bytes = match ethers::abi::decode(&[ParamType::Bytes], &log.data)
             .expect("log data is valid rlp data; qed")

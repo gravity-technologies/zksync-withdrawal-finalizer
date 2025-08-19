@@ -17,13 +17,11 @@ use futures::TryFutureExt;
 use sqlx::PgPool;
 
 use client::{
-    withdrawal_finalizer::codegen::withdrawal_finalizer::Result as FinalizeResult,
-    WithdrawalKey,
+    l1_shared_bridge::codegen::IL1SharedBridge, withdrawal_finalizer::codegen::WithdrawalFinalizer,
+    zksync_contract::codegen::IZkSync, WithdrawalParams, ZksyncMiddleware,
 };
 use client::{
-    withdrawal_finalizer::codegen::WithdrawalFinalizer,
-    l1_shared_bridge::codegen::IL1SharedBridge,
-    zksync_contract::codegen::IZkSync, WithdrawalParams, ZksyncMiddleware,
+    withdrawal_finalizer::codegen::withdrawal_finalizer::Result as FinalizeResult, WithdrawalKey,
 };
 use withdrawals_meterer::{MeteringComponent, WithdrawalsMeter};
 
@@ -392,8 +390,13 @@ where
 
         let predicted = std::mem::take(&mut self.unsuccessful);
         tracing::debug!("requesting finalization status of withdrawals");
-        let are_finalized =
-            get_finalized_withdrawals(&predicted, &self.zksync_contract, &self.l1_bridge, self.zksync_network_id).await?;
+        let are_finalized = get_finalized_withdrawals(
+            &predicted,
+            &self.zksync_contract,
+            &self.l1_bridge,
+            self.zksync_network_id,
+        )
+        .await?;
 
         let mut already_finalized = vec![];
         let mut unsuccessful = vec![];
@@ -459,10 +462,10 @@ where
             let l2_message_index = U256::from(wd.l2_message_index);
 
             l1_bridge
-            .is_withdrawal_finalized(zksync_network_ids, l1_batch_number, l2_message_index)
-            .call()
-            .await
-            .map_err(|e| e.into())
+                .is_withdrawal_finalized(zksync_network_ids, l1_batch_number, l2_message_index)
+                .call()
+                .await
+                .map_err(|e| e.into())
         }))
         .await
         .into_iter()
@@ -493,7 +496,7 @@ async fn request_finalize_params<M2>(
     pgpool: &PgPool,
     middleware: M2,
     hash_and_indices: &[(H256, u16, u64)],
-) -> Vec<WithdrawalParams>
+) -> Option<Vec<WithdrawalParams>>
 where
     M2: ZksyncMiddleware,
 {
@@ -502,20 +505,30 @@ where
     // Run all parametere fetching in parallel.
     // Filter out errors and log them and increment a metric counter.
     // Return successful fetches.
-    for (i, result) in futures::future::join_all(hash_and_indices.iter().map(|(h, i, id)| {
+    let params_opt = futures::future::join_all(hash_and_indices.iter().map(|(h, i, id)| {
         middleware
             .finalize_withdrawal_params(*h, *i as usize)
-            .map_ok(|r| {
-                let mut r = r.expect("always able to ask withdrawal params; qed");
-                r.id = *id;
+            .map_ok(|mut r| {
+                if let Some(r) = r.as_mut() {
+                    r.id = *id;
+                }
                 r
             })
             .map_err(crate::Error::from)
     }))
-    .await
-    .into_iter()
-    .enumerate()
-    {
+    .await;
+
+    let mut params = Vec::with_capacity(params_opt.len());
+    for result in params_opt {
+        match result {
+            Ok(Some(param)) => params.push(Ok(param)),
+            // skip if params are not ready
+            Ok(None) => {}
+            Err(err) => params.push(Err(err)),
+        }
+    }
+
+    for (i, result) in params.into_iter().enumerate() {
         match result {
             Ok(r) => ok_results.push(r),
             Err(e) => {
@@ -533,7 +546,7 @@ where
         }
     }
 
-    ok_results
+    Some(ok_results)
 }
 
 // Continiously query the new withdrawals that have been seen by watcher
@@ -550,8 +563,14 @@ async fn params_fetcher_loop<M1, M2>(
     M2: ZksyncMiddleware,
 {
     loop {
-        if let Err(e) =
-            params_fetcher_loop_iteration(&pool, &middleware, &zksync_contract, &l1_bridge, zksync_network_ids).await
+        if let Err(e) = params_fetcher_loop_iteration(
+            &pool,
+            &middleware,
+            &zksync_contract,
+            &l1_bridge,
+            zksync_network_ids,
+        )
+        .await
         {
             tracing::error!("params fetcher iteration ended with {e}");
             tokio::time::sleep(LOOP_ITERATION_ERROR_BACKOFF).await;
@@ -584,12 +603,20 @@ where
         .map(|p| (p.key.tx_hash, p.key.event_index_in_tx as u16, p.id))
         .collect();
 
-    let params = request_finalize_params(pool, &middleware, &hash_and_index_and_id).await;
+    let Some(params) = request_finalize_params(pool, &middleware, &hash_and_index_and_id).await
+    else {
+        // Early-return if params are not ready.
+        tracing::info!("Params are not ready");
+        return Ok(());
+    };
 
-    let already_finalized: Vec<_> = get_finalized_withdrawals(&params, zksync_contract, l1_bridge, zksync_network_ids)
-        .await?
-        .into_iter()
-        .collect();
+    tracing::debug!("finalization params fetched: {:?}", params);
+
+    let already_finalized: Vec<_> =
+        get_finalized_withdrawals(&params, zksync_contract, l1_bridge, zksync_network_ids)
+            .await?
+            .into_iter()
+            .collect();
 
     tracing::debug!("already finalized {already_finalized:?}");
 
