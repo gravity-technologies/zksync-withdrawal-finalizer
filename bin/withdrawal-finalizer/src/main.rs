@@ -49,9 +49,12 @@ fn run_vise_exporter() -> Result<watch::Sender<()>> {
     Ok(shutdown_sender)
 }
 
+// During the migration period from l1 to sl information about chain id is missing, so if settlement layer is l1, it's safe to use chain_id == null
 async fn start_from_l1_block<M1, M2>(
-    client_l1: Arc<M1>,
+    client_sl: Arc<M1>,
     client_l2: Arc<M2>,
+    sl_chain_id: u32,
+    settlement_layer_is_l1: bool,
     conn: &mut PgConnection,
 ) -> Result<u64>
 where
@@ -60,17 +63,25 @@ where
     M2: Middleware,
     <M2 as Middleware>::Provider: JsonRpcClient,
 {
-    match storage::last_l1_block_seen(conn).await? {
+    match storage::last_l1_block_seen(conn, sl_chain_id, settlement_layer_is_l1).await? {
         Some(b2) => Ok(b2),
         None => {
-            tracing::info!(concat!(
-                "information about last block seen is missing, ",
-                "starting from L1 block corresponding to L2 block 1"
-            ));
+            let last_processed_block = if let Some(start_from_l2_block) =
+                storage::last_processed_l2_block_with_null(conn).await?
+            {
+                start_from_l2_block
+            } else {
+                storage::last_processed_l2_block_on_the_previous_chain(conn, sl_chain_id).await?
+            };
+            let new_block_to_process = last_processed_block + 1;
+            tracing::info!(
+                "information about last L1 block seen is missing, starting from L2 block {}",
+                new_block_to_process
+            );
 
             let block_details = client_l2
                 .provider()
-                .get_block_details(1)
+                .get_block_details(new_block_to_process as u32)
                 .await?
                 .expect("Always start from the block that there is info about; qed");
 
@@ -78,7 +89,7 @@ where
                 .commit_tx_hash
                 .expect("A first block on L2 is always committed; qed");
 
-            let commit_tx = client_l1
+                let commit_tx = client_sl
                 .get_transaction(commit_tx_hash)
                 .await
                 .map_err(|e| anyhow!("{e}"))?
@@ -158,12 +169,29 @@ async fn main() -> Result<()> {
     let provider_l1 = Provider::<Http>::try_from(config.eth_client_http_url.as_ref()).unwrap();
     let client_l1 = Arc::new(provider_l1);
 
-    let provider_l2 =
+    let provider_l2: Provider<Http> =
         Provider::<Http>::try_from(config.api_web3_json_rpc_http_url.as_str()).unwrap();
 
     let client_l2 = Arc::new(provider_l2);
 
-    let event_mux = BlockEvents::new(config.eth_client_ws_url.as_ref());
+    let provider_sl: Provider<Http> = Provider::<Http>::try_from(
+        config
+            .sl_client_http_url
+            .clone()
+            .unwrap_or(config.eth_client_http_url.clone())
+            .as_str(),
+    )
+    .unwrap();
+
+    let client_sl = Arc::new(provider_sl);
+
+    let event_mux = BlockEvents::new(
+        config
+            .sl_client_ws_url
+            .clone()
+            .unwrap_or(config.eth_client_ws_url.clone())
+            .as_ref(),
+    );
     let (blocks_tx, blocks_rx) = tokio::sync::mpsc::channel(CHANNEL_CAPACITY);
 
     let blocks_tx_wrapped = tokio_util::sync::PollSender::new(blocks_tx.clone());
@@ -190,10 +218,14 @@ async fn main() -> Result<()> {
 
     let we_tx_wrapped = tokio_util::sync::PollSender::new(we_tx.clone());
     let we_rx = tokio_stream::wrappers::ReceiverStream::new(we_rx);
+    let sl_chain_id = client_sl.get_chain_id().await?;
+    let l1_chain_id = client_l1.get_chain_id().await?;
 
     let from_l1_block = start_from_l1_block(
-        client_l1.clone(),
+        client_sl.clone(),
         client_l2.clone(),
+        sl_chain_id,
+        sl_chain_id == l1_chain_id,
         &mut pgpool.acquire().await?.detach(),
     )
     .await?;
@@ -228,7 +260,7 @@ async fn main() -> Result<()> {
 
     let l1_bridge = IL1SharedBridge::new(config.l1_shared_bridge_proxy_addr, client_l1.clone());
 
-    let zksync_contract = IZkSync::new(config.diamond_proxy_addr, client_l1.clone());
+    let zksync_contract = IZkSync::new(config.diamond_proxy_addr, client_sl.clone());
 
     // by default meter withdrawals
     let meter_withdrawals = config.enable_withdrawal_metering.unwrap_or(true);
