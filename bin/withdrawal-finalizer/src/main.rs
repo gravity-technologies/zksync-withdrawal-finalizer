@@ -231,7 +231,12 @@ async fn main() -> Result<()> {
     // by default meter withdrawals
     let meter_withdrawals = config.enable_withdrawal_metering.unwrap_or(true);
 
-    let watcher = Watcher::new(client_l2.clone(), pgpool.clone(), meter_withdrawals);
+    let watcher = Watcher::new(
+        client_l2.clone(),
+        pgpool.clone(),
+        meter_withdrawals,
+        config.withhold_new_withdrawals.unwrap_or(false),
+    );
 
     let withdrawal_events_handle = tokio::spawn(l2_events.run_with_reconnects(
         from_l2_block,
@@ -303,7 +308,7 @@ async fn main() -> Result<()> {
         meter_withdrawals,
         eth_finalization_threshold,
         config.only_l1_recipients.map(|v| v.0.into_iter().collect()),
-        config.withhold_withdrawals.unwrap_or(false),
+        config.ignore_withhold.unwrap_or(false),
     );
     let finalizer_handle = tokio::spawn(finalizer.run(client_l2));
 

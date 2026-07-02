@@ -281,7 +281,11 @@ pub async fn get_withdrawals(pool: &PgPool, ids: &[i64]) -> Result<Vec<StoredWit
 ///
 /// * `conn`: Connection to the Postgres DB
 /// * `events`: Withdrawal events grouped with their indices in transaction.
-pub async fn add_withdrawals(pool: &PgPool, events: &[StoredWithdrawal]) -> Result<()> {
+pub async fn add_withdrawals(
+    pool: &PgPool,
+    events: &[StoredWithdrawal],
+    withheld: bool,
+) -> Result<()> {
     let mut tx_hashes = Vec::with_capacity(events.len());
     let mut block_numbers = Vec::with_capacity(events.len());
     let mut tokens = Vec::with_capacity(events.len());
@@ -309,7 +313,8 @@ pub async fn add_withdrawals(pool: &PgPool, events: &[StoredWithdrawal]) -> Resu
             token,
             amount,
             event_index_in_tx,
-            l1_receiver
+            l1_receiver,
+            withheld
           )
         SELECT
           u.tx_hash,
@@ -317,7 +322,8 @@ pub async fn add_withdrawals(pool: &PgPool, events: &[StoredWithdrawal]) -> Resu
           u.token,
           u.amount,
           u.index_in_tx,
-          u.l1_receiver
+          u.l1_receiver,
+          $7 :: bool
         FROM
           unnest(
             $1 :: BYTEA [],
@@ -344,6 +350,7 @@ pub async fn add_withdrawals(pool: &PgPool, events: &[StoredWithdrawal]) -> Resu
         amounts.as_slice(),
         &indices_in_tx,
         &l1_receivers as &[Option<Vec<u8>>],
+        withheld,
     )
     .execute(pool)
     .await?;
@@ -749,9 +756,10 @@ pub async fn set_withdrawal_unfinalizable(
 
 /// Manually set the `withheld` flag on a withdrawal.
 ///
-/// New withdrawals are withheld by default. When withhold mode is enabled (see the
-/// `WITHHOLD_WITHDRAWALS` config), only withdrawals released with `withheld = false`
-/// are picked up by [`withdrawals_to_finalize`].
+/// Withheld withdrawals are skipped by [`withdrawals_to_finalize`] unless the
+/// finalizer runs with `IGNORE_WITHHOLD`. Release a withheld withdrawal by setting
+/// `withheld = false`; new withdrawals are recorded as withheld only when the watcher
+/// runs with `WITHHOLD_NEW_WITHDRAWALS`.
 pub async fn set_withdrawal_withheld(pool: &PgPool, id: u64, withheld: bool) -> Result<()> {
     let latency = STORAGE_METRICS.call[&"set_withdrawal_withheld"].start();
 
@@ -778,7 +786,7 @@ pub async fn withdrawals_to_finalize(
     limit_by: u64,
     eth_threshold: Option<U256>,
     only_l1_recipients: Option<&[Address]>,
-    respect_withhold: bool,
+    ignore_withhold: bool,
 ) -> Result<Vec<WithdrawalParams>> {
     let latency = STORAGE_METRICS.call[&"withdrawals_to_finalize"].start();
     // if no threshold, query _all_ ethereum withdrawals since all of them are >= 0.
@@ -846,22 +854,22 @@ pub async fn withdrawals_to_finalize(
           _ // Maybe filter by l1 receiver
         ],
         match (only_l1_recipients) {
-            // `$N::bool` is the `respect_withhold` flag: when false the clause is
-            // always true (no filtering); when true only released rows pass.
+            // `$N::bool` is the `ignore_withhold` flag: when true the clause is
+            // always satisfied (no filtering); when false only released rows pass.
             Some(receivers) => (
-                "AND l1_receiver = ANY($3) AND (NOT $4::bool OR w.withheld = FALSE) limit $1";
+                "AND l1_receiver = ANY($3) AND ($4::bool OR w.withheld = FALSE) limit $1";
                 limit_by as i64,
                 u256_to_big_decimal(eth_threshold),
                 &receivers.iter()
                     .map(Address::as_bytes)
                     .collect::<Vec<_>>() as &[&[u8]],
-                respect_withhold
+                ignore_withhold
             ),
             None => (
-                "AND (NOT $3::bool OR w.withheld = FALSE) limit $1";
+                "AND ($3::bool OR w.withheld = FALSE) limit $1";
                 limit_by as i64,
                 u256_to_big_decimal(eth_threshold),
-                respect_withhold
+                ignore_withhold
             ),
         }
     );
