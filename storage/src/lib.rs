@@ -747,12 +747,38 @@ pub async fn set_withdrawal_unfinalizable(
     Ok(())
 }
 
+/// Manually set the `withheld` flag on a withdrawal.
+///
+/// New withdrawals are withheld by default. When withhold mode is enabled (see the
+/// `WITHHOLD_WITHDRAWALS` config), only withdrawals released with `withheld = false`
+/// are picked up by [`withdrawals_to_finalize`].
+pub async fn set_withdrawal_withheld(pool: &PgPool, id: u64, withheld: bool) -> Result<()> {
+    let latency = STORAGE_METRICS.call[&"set_withdrawal_withheld"].start();
+
+    sqlx::query!(
+        "
+            UPDATE withdrawals
+            SET withheld = $2
+            WHERE id = $1
+        ",
+        id as i64,
+        withheld,
+    )
+    .execute(pool)
+    .await?;
+
+    latency.observe();
+
+    Ok(())
+}
+
 /// Get the earliest withdrawals never attempted to be finalized before
 pub async fn withdrawals_to_finalize(
     pool: &PgPool,
     limit_by: u64,
     eth_threshold: Option<U256>,
     only_l1_recipients: Option<&[Address]>,
+    respect_withhold: bool,
 ) -> Result<Vec<WithdrawalParams>> {
     let latency = STORAGE_METRICS.call[&"withdrawals_to_finalize"].start();
     // if no threshold, query _all_ ethereum withdrawals since all of them are >= 0.
@@ -820,18 +846,22 @@ pub async fn withdrawals_to_finalize(
           _ // Maybe filter by l1 receiver
         ],
         match (only_l1_recipients) {
+            // `$N::bool` is the `respect_withhold` flag: when false the clause is
+            // always true (no filtering); when true only released rows pass.
             Some(receivers) => (
-                "AND l1_receiver = ANY($3) limit $1";
+                "AND l1_receiver = ANY($3) AND (NOT $4::bool OR w.withheld = FALSE) limit $1";
                 limit_by as i64,
                 u256_to_big_decimal(eth_threshold),
                 &receivers.iter()
                     .map(Address::as_bytes)
-                    .collect::<Vec<_>>() as &[&[u8]]
+                    .collect::<Vec<_>>() as &[&[u8]],
+                respect_withhold
             ),
             None => (
-                "limit $1";
+                "AND (NOT $3::bool OR w.withheld = FALSE) limit $1";
                 limit_by as i64,
-                u256_to_big_decimal(eth_threshold)
+                u256_to_big_decimal(eth_threshold),
+                respect_withhold
             ),
         }
     );

@@ -94,6 +94,12 @@ pub struct Config {
     /// Only finalize these tokens specified by their L2 addresses
     #[envconfig(from = "ONLY_FINALIZE_THESE_TOKENS")]
     pub only_finalize_these_tokens: Option<AddrList>,
+
+    /// When enabled, withdrawals are withheld from finalization by default and only
+    /// those explicitly released (`withheld = false`) are finalized. Defaults to off,
+    /// in which case the `withheld` flag is ignored and every withdrawal is finalized.
+    #[envconfig(from = "WITHHOLD_WITHDRAWALS")]
+    pub withhold_withdrawals: Option<bool>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Eq, PartialEq)]

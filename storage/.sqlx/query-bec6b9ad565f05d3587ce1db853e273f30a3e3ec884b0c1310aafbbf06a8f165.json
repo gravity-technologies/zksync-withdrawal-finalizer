@@ -42,6 +42,11 @@
         "ordinal": 7,
         "name": "l1_receiver",
         "type_info": "Bytea"
+      },
+      {
+        "ordinal": 8,
+        "name": "withheld",
+        "type_info": "Bool"
       }
     ],
     "parameters": {
@@ -57,7 +62,8 @@
       false,
       false,
       false,
-      true
+      true,
+      false
     ]
   },
   "hash": "bec6b9ad565f05d3587ce1db853e273f30a3e3ec884b0c1310aafbbf06a8f165"

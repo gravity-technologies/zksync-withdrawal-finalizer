@@ -75,6 +75,7 @@ pub struct Finalizer<M1, M2> {
     withdrawals_meterer: Option<WithdrawalsMeter>,
     eth_threshold: Option<U256>,
     only_l1_recipients: Option<Vec<Address>>,
+    respect_withhold: bool,
 }
 
 const NO_NEW_WITHDRAWALS_BACKOFF: Duration = Duration::from_secs(5);
@@ -106,6 +107,7 @@ where
         meter_withdrawals: bool,
         eth_threshold: Option<U256>,
         only_l1_recipients: Option<Vec<Address>>,
+        respect_withhold: bool,
     ) -> Self {
         let withdrawals_meterer = meter_withdrawals.then_some(WithdrawalsMeter::new(
             pgpool.clone(),
@@ -131,6 +133,7 @@ where
             withdrawals_meterer,
             eth_threshold,
             only_l1_recipients,
+            respect_withhold,
         }
     }
 
@@ -329,6 +332,7 @@ where
             self.query_db_pagination_limit,
             self.eth_threshold,
             self.only_l1_recipients.as_deref(),
+            self.respect_withhold,
         )
         .await?;
 

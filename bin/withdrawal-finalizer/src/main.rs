@@ -22,9 +22,7 @@ use sqlx::{
 
 use chain_events::{BlockEvents, L2EventsListener};
 use client::{
-    l1_shared_bridge::codegen::IL1SharedBridge,
-    zksync_contract::codegen::IZkSync,
-    ZksyncMiddleware
+    l1_shared_bridge::codegen::IL1SharedBridge, zksync_contract::codegen::IZkSync, ZksyncMiddleware,
 };
 use config::Config;
 use tokio::sync::watch;
@@ -305,6 +303,7 @@ async fn main() -> Result<()> {
         meter_withdrawals,
         eth_finalization_threshold,
         config.only_l1_recipients.map(|v| v.0.into_iter().collect()),
+        config.withhold_withdrawals.unwrap_or(false),
     );
     let finalizer_handle = tokio::spawn(finalizer.run(client_l2));
 

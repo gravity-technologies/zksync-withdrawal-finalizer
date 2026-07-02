@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE withdrawals\n            SET withheld = $2\n            WHERE id = $1\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "75f2626f82ce31dd70d639707c7c9acdfc208d7e1a08a4a457e6d60a2a076202"
+}
