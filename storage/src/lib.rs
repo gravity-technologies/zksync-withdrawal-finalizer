@@ -754,32 +754,6 @@ pub async fn set_withdrawal_unfinalizable(
     Ok(())
 }
 
-/// Manually set the `withheld` flag on a withdrawal.
-///
-/// Withheld withdrawals are skipped by [`withdrawals_to_finalize`] unless the
-/// finalizer runs with `IGNORE_WITHHOLD`. Release a withheld withdrawal by setting
-/// `withheld = false`; new withdrawals are recorded as withheld only when the watcher
-/// runs with `WITHHOLD_NEW_WITHDRAWALS`.
-pub async fn set_withdrawal_withheld(pool: &PgPool, id: u64, withheld: bool) -> Result<()> {
-    let latency = STORAGE_METRICS.call[&"set_withdrawal_withheld"].start();
-
-    sqlx::query!(
-        "
-            UPDATE withdrawals
-            SET withheld = $2
-            WHERE id = $1
-        ",
-        id as i64,
-        withheld,
-    )
-    .execute(pool)
-    .await?;
-
-    latency.observe();
-
-    Ok(())
-}
-
 /// Get the earliest withdrawals never attempted to be finalized before
 pub async fn withdrawals_to_finalize(
     pool: &PgPool,
