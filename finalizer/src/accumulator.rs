@@ -41,7 +41,7 @@ impl WithdrawalsAccumulator {
         for u in unsuccessful {
             if let Some(wp) = self
                 .withdrawals
-                .remove(&(u.l_2_block_number.as_u64(), u.l_2_message_index.as_u64()))
+                .remove(&(u.l_2_batch_number.as_u64(), u.l_2_message_index.as_u64()))
             {
                 result.push(wp);
             }

@@ -10,7 +10,7 @@ use sqlx::{PgConnection, PgPool};
 
 use chain_events::L2TokenInitEvent;
 use client::{
-    is_eth, withdrawal_finalizer::codegen::RequestFinalizeWithdrawal, zksync_contract::L2ToL1Event,
+    withdrawal_finalizer::codegen::RequestFinalizeWithdrawal, zksync_contract::L2ToL1Event,
     WithdrawalEvent, WithdrawalKey, WithdrawalParams,
 };
 
@@ -281,7 +281,11 @@ pub async fn get_withdrawals(pool: &PgPool, ids: &[i64]) -> Result<Vec<StoredWit
 ///
 /// * `conn`: Connection to the Postgres DB
 /// * `events`: Withdrawal events grouped with their indices in transaction.
-pub async fn add_withdrawals(pool: &PgPool, events: &[StoredWithdrawal]) -> Result<()> {
+pub async fn add_withdrawals(
+    pool: &PgPool,
+    events: &[StoredWithdrawal],
+    withheld: bool,
+) -> Result<()> {
     let mut tx_hashes = Vec::with_capacity(events.len());
     let mut block_numbers = Vec::with_capacity(events.len());
     let mut tokens = Vec::with_capacity(events.len());
@@ -309,7 +313,8 @@ pub async fn add_withdrawals(pool: &PgPool, events: &[StoredWithdrawal]) -> Resu
             token,
             amount,
             event_index_in_tx,
-            l1_receiver
+            l1_receiver,
+            withheld
           )
         SELECT
           u.tx_hash,
@@ -317,7 +322,8 @@ pub async fn add_withdrawals(pool: &PgPool, events: &[StoredWithdrawal]) -> Resu
           u.token,
           u.amount,
           u.index_in_tx,
-          u.l1_receiver
+          u.l1_receiver,
+          $7 :: bool
         FROM
           unnest(
             $1 :: BYTEA [],
@@ -344,6 +350,7 @@ pub async fn add_withdrawals(pool: &PgPool, events: &[StoredWithdrawal]) -> Resu
         amounts.as_slice(),
         &indices_in_tx,
         &l1_receivers as &[Option<Vec<u8>>],
+        withheld,
     )
     .execute(pool)
     .await?;
@@ -687,14 +694,11 @@ pub async fn get_withdrawals_with_no_data(
             ),
             1
           )
-          AND id > COALESCE(
-            (
-              SELECT
-                MAX(withdrawal_id)
-              FROM
-                finalization_data
-            ),
-            1
+          AND id not in (
+            SELECT
+            withdrawal_id
+            FROM
+              finalization_data
           )
           AND finalizable = TRUE
         ORDER BY
@@ -756,6 +760,7 @@ pub async fn withdrawals_to_finalize(
     limit_by: u64,
     eth_threshold: Option<U256>,
     only_l1_recipients: Option<&[Address]>,
+    ignore_withhold: bool,
 ) -> Result<Vec<WithdrawalParams>> {
     let latency = STORAGE_METRICS.call[&"withdrawals_to_finalize"].start();
     // if no threshold, query _all_ ethereum withdrawals since all of them are >= 0.
@@ -823,18 +828,22 @@ pub async fn withdrawals_to_finalize(
           _ // Maybe filter by l1 receiver
         ],
         match (only_l1_recipients) {
+            // `$N::bool` is the `ignore_withhold` flag: when true the clause is
+            // always satisfied (no filtering); when false only released rows pass.
             Some(receivers) => (
-                "AND l1_receiver = ANY($3) limit $1";
+                "AND l1_receiver = ANY($3) AND ($4::bool OR w.withheld = FALSE) limit $1";
                 limit_by as i64,
                 u256_to_big_decimal(eth_threshold),
                 &receivers.iter()
                     .map(Address::as_bytes)
-                    .collect::<Vec<_>>() as &[&[u8]]
+                    .collect::<Vec<_>>() as &[&[u8]],
+                ignore_withhold
             ),
             None => (
-                "limit $1";
+                "AND ($3::bool OR w.withheld = FALSE) limit $1";
                 limit_by as i64,
-                u256_to_big_decimal(eth_threshold)
+                u256_to_big_decimal(eth_threshold),
+                ignore_withhold
             ),
         }
     );
@@ -961,12 +970,11 @@ pub async fn get_finalize_withdrawal_params(
     .fetch_optional(pool)
     .await?
     .map(|r| RequestFinalizeWithdrawal {
-        l_2_block_number: r.l1_batch_number.into(),
+        l_2_batch_number: r.l1_batch_number.into(),
         l_2_message_index: r.l2_message_index.into(),
-        l_2_tx_number_in_block: r.l2_tx_number_in_block as u16,
+        l_2_tx_number_in_batch: r.l2_tx_number_in_block as u16,
         message: r.message.into(),
         merkle_proof: bincode::deserialize(&r.proof).unwrap(),
-        is_eth: is_eth(Address::from_slice(&r.token)),
         gas: gas.into(),
     });
 

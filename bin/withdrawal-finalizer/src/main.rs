@@ -21,7 +21,9 @@ use sqlx::{
 };
 
 use chain_events::{BlockEvents, L2EventsListener};
-use client::{l1bridge::codegen::IL1Bridge, zksync_contract::codegen::IZkSync, ZksyncMiddleware};
+use client::{
+    l1_shared_bridge::codegen::IL1SharedBridge, zksync_contract::codegen::IZkSync, ZksyncMiddleware,
+};
 use config::Config;
 use tokio::sync::watch;
 use vise_exporter::MetricsExporter;
@@ -217,19 +219,24 @@ async fn main() -> Result<()> {
         config
             .custom_token_deployer_addresses
             .map(|list| list.0)
-            .unwrap_or(vec![config.l2_erc20_bridge_addr]),
+            .unwrap_or(vec![config.l2_shared_bridge_addr]),
         tokens.into_iter().collect(),
         config.finalize_eth_token.unwrap_or(true),
     );
 
-    let l1_bridge = IL1Bridge::new(config.l1_erc20_bridge_proxy_addr, client_l1.clone());
+    let l1_bridge = IL1SharedBridge::new(config.l1_shared_bridge_proxy_addr, client_l1.clone());
 
     let zksync_contract = IZkSync::new(config.diamond_proxy_addr, client_l1.clone());
 
     // by default meter withdrawals
     let meter_withdrawals = config.enable_withdrawal_metering.unwrap_or(true);
 
-    let watcher = Watcher::new(client_l2.clone(), pgpool.clone(), meter_withdrawals);
+    let watcher = Watcher::new(
+        client_l2.clone(),
+        pgpool.clone(),
+        meter_withdrawals,
+        config.withhold_new_withdrawals.unwrap_or(false),
+    );
 
     let withdrawal_events_handle = tokio::spawn(l2_events.run_with_reconnects(
         from_l2_block,
@@ -241,7 +248,7 @@ async fn main() -> Result<()> {
 
     let block_events_handle = tokio::spawn(event_mux.run_with_reconnects(
         config.diamond_proxy_addr,
-        config.l2_erc20_bridge_addr,
+        config.l2_shared_bridge_addr,
         from_l1_block,
         blocks_tx_wrapped,
     ));
@@ -295,11 +302,13 @@ async fn main() -> Result<()> {
         contract,
         zksync_contract,
         l1_bridge,
+        config.chain_eth_zksync_network_id.into(),
         config.tx_retry_timeout,
         finalizer_account_address,
         meter_withdrawals,
         eth_finalization_threshold,
         config.only_l1_recipients.map(|v| v.0.into_iter().collect()),
+        config.ignore_withhold.unwrap_or(false),
     );
     let finalizer_handle = tokio::spawn(finalizer.run(client_l2));
 

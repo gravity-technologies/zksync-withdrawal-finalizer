@@ -2,6 +2,7 @@ use std::str::FromStr;
 
 use envconfig::Envconfig;
 use ethers::types::Address;
+
 use finalizer::AddrList;
 use serde::{Deserialize, Serialize};
 use url::Url;
@@ -21,13 +22,16 @@ pub struct Config {
     #[envconfig(from = "ETH_CLIENT_HTTP_URL")]
     pub eth_client_http_url: Url,
 
+    #[envconfig(from = "CHAIN_ETH_ZKSYNC_NETWORK_ID")]
+    pub chain_eth_zksync_network_id: u64,
+
     /// Address of the `L1Bridge` contract.
-    #[envconfig(from = "CONTRACTS_L1_ERC20_BRIDGE_PROXY_ADDR")]
-    pub l1_erc20_bridge_proxy_addr: Address,
+    #[envconfig(from = "CONTRACTS_L1_SHARED_BRIDGE_PROXY_ADDR")]
+    pub l1_shared_bridge_proxy_addr: Address,
 
     /// Address of the `L2ERC20Bridge` contract.
-    #[envconfig(from = "CONTRACTS_L2_ERC20_BRIDGE_ADDR")]
-    pub l2_erc20_bridge_addr: Address,
+    #[envconfig(from = "CONTRACTS_L2_SHARED_BRIDGE_PROXY_ADDR")]
+    pub l2_shared_bridge_addr: Address,
 
     /// Main contract
     #[envconfig(from = "CONTRACTS_DIAMOND_PROXY_ADDR")]
@@ -90,6 +94,18 @@ pub struct Config {
     /// Only finalize these tokens specified by their L2 addresses
     #[envconfig(from = "ONLY_FINALIZE_THESE_TOKENS")]
     pub only_finalize_these_tokens: Option<AddrList>,
+
+    /// When enabled, newly observed withdrawals are recorded as withheld
+    /// (`withheld = true`) so they are not finalized until explicitly released.
+    /// Existing withdrawals are unaffected. Defaults to off.
+    #[envconfig(from = "WITHHOLD_NEW_WITHDRAWALS")]
+    pub withhold_new_withdrawals: Option<bool>,
+
+    /// When enabled, the finalizer ignores the `withheld` flag and finalizes
+    /// withdrawals regardless of whether they have been released. Defaults to off,
+    /// i.e. withheld withdrawals are held back.
+    #[envconfig(from = "IGNORE_WITHHOLD")]
+    pub ignore_withhold: Option<bool>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Eq, PartialEq)]

@@ -1,0 +1,6 @@
+{
+    "WithdrawalFinalizerModule": {
+        "chainId": 270,
+        "l1SharedBridge": "0xbFc201b08F2a670B935F0f6E97d2032d95477A07"
+    }
+}
