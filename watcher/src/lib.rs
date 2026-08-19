@@ -35,6 +35,7 @@ pub struct Watcher<M2> {
     l2_provider: Arc<M2>,
     pgpool: PgPool,
     withdrawals_meterer: Option<WithdrawalsMeter>,
+    withhold_new_withdrawals: bool,
 }
 
 impl<M2> Watcher<M2>
@@ -42,7 +43,12 @@ where
     M2: ZksyncMiddleware + 'static,
     <M2 as Middleware>::Provider: JsonRpcClient,
 {
-    pub fn new(l2_provider: Arc<M2>, pgpool: PgPool, meter_withdrawals: bool) -> Self {
+    pub fn new(
+        l2_provider: Arc<M2>,
+        pgpool: PgPool,
+        meter_withdrawals: bool,
+        withhold_new_withdrawals: bool,
+    ) -> Self {
         let withdrawals_meterer = meter_withdrawals.then_some(WithdrawalsMeter::new(
             pgpool.clone(),
             MeteringComponent::RequestedWithdrawals,
@@ -52,6 +58,7 @@ where
             l2_provider,
             pgpool,
             withdrawals_meterer,
+            withhold_new_withdrawals,
         }
     }
 
@@ -69,6 +76,7 @@ where
             l2_provider,
             pgpool,
             withdrawals_meterer,
+            withhold_new_withdrawals,
         } = self;
 
         // While reading the stream of withdrawal events asyncronously
@@ -97,6 +105,7 @@ where
                 withdrawal_events,
                 from_l2_block,
                 withdrawals_meterer,
+                withhold_new_withdrawals,
             )
             .await
         });
@@ -304,6 +313,7 @@ async fn process_withdrawals_in_block(
     pool: &PgPool,
     events: Vec<WithdrawalEvent>,
     withdrawals_meterer: &mut Option<WithdrawalsMeter>,
+    withhold_new_withdrawals: bool,
 ) -> Result<()> {
     use itertools::Itertools;
     let group_by = events.into_iter().group_by(|event| event.tx_hash);
@@ -338,7 +348,7 @@ async fn process_withdrawals_in_block(
         }
     }
 
-    storage::add_withdrawals(pool, &stored_withdrawals).await?;
+    storage::add_withdrawals(pool, &stored_withdrawals, withhold_new_withdrawals).await?;
     Ok(())
 }
 
@@ -380,6 +390,7 @@ async fn run_l2_events_loop<WE>(
     we: WE,
     from_l2_block: u64,
     mut withdrawals_meterer: Option<WithdrawalsMeter>,
+    withhold_new_withdrawals: bool,
 ) -> Result<()>
 where
     WE: Stream<Item = L2Event>,
@@ -398,6 +409,7 @@ where
                             &pool,
                             std::mem::take(&mut in_block_events),
                             &mut withdrawals_meterer,
+                            withhold_new_withdrawals,
                         )
                         .await?;
                     }
@@ -425,6 +437,7 @@ where
                     &pool,
                     std::mem::take(&mut in_block_events),
                     &mut withdrawals_meterer,
+                    withhold_new_withdrawals,
                 )
                 .await?;
             }
@@ -436,6 +449,7 @@ where
                             &pool,
                             std::mem::take(&mut in_block_events),
                             &mut withdrawals_meterer,
+                            withhold_new_withdrawals,
                         )
                         .await?;
                         curr_l2_block_number = block_number;
